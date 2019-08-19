@@ -7,20 +7,21 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
 
 {{ macros.configure_user(name='mysql') }}
 
-{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+{% if base_package_type == 'rpm' %}
     {% set mariadb_packages = [
         'expect',
         'galera',
         'hostname',
         'mariadb',
-        'mariadb-server-galera',
         'mariadb-backup',
+        'mariadb-server-galera',
+        'mariadb-server-utils',
         'pv',
         'rsync',
         'tar'
     ] %}
 
-{% elif base_distro in ['debian', 'ubuntu'] %}
+{% elif base_package_type == 'deb' %}
     {% set mariadb_packages = [
         'expect'
     ] %}
@@ -47,9 +48,23 @@ RUN chmod 755 /usr/local/bin/kolla_extend_start \
     && chmod 440 /etc/sudoers.d/kolla_mariadb_sudoers \
     && rm -rf /var/lib/mysql/*
 
-{% if base_distro in ['debian', 'ubuntu'] %}
+{% if base_package_type == 'deb' %}
 RUN mkdir -p /var/run/mysqld && chown mysql /var/run/mysqld && chmod 755 /var/run/mysqld
 {% endif %}
+
+{% if use_dumb_init %}
+{% block mariadb_entrypoint %}
+# NOTE(mgoddard): Override the dumb-init arguments to avoid passing
+# --single-child. This does not play well with mysqld_safe, which ignores
+# SIGTERM, meaning Docker needs to forcibly kill the container to stop it.
+# Without --single-child, the TERM signal is sent to all subprocesses,
+# including mysqld.
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["kolla_start"]
+{% endblock %}
+{% endif %}
+
 {% block mariadb_footer %}{% endblock %}
 {% block footer %}{% endblock %}
 

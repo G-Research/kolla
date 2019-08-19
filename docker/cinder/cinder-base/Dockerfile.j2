@@ -8,28 +8,41 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
 {{ macros.configure_user(name='cinder') }}
 
 {% if install_type == 'binary' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% if base_package_type == 'rpm' %}
         {% set cinder_base_packages = [
                 'ceph-common',
                 'lvm2',
                 'cryptsetup',
-                'openstack-cinder',
+                'openstack-cinder'
+        ] %}
+
+        {% if distro_python_version.startswith('3') %}
+        {% set cinder_base_packages = cinder_base_packages + [
+                'python3-automaton',
+                'python3-oslo-vmware'
+        ] %}
+        {% else %}
+        {% set cinder_base_packages = cinder_base_packages + [
                 'python-automaton',
                 'python-oslo-vmware'
         ] %}
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% endif %}
+    {% elif base_package_type == 'deb' %}
         {% set cinder_base_packages = [
                 'ceph-common',
                 'cinder-common',
                 'lvm2',
                 'cryptsetup',
-                'python-oslo.vmware'
+                'python3-cephfs',
+                'python3-oslo.vmware',
+                'python3-rados',
+                'python3-rbd'
         ] %}
     {% endif %}
 {{ macros.install_packages(cinder_base_packages | customizable("packages")) }}
 
 {% elif install_type == 'source' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% if base_package_type == 'rpm' %}
         {% set cinder_base_packages = [
                 'ceph-common',
                 'lvm2',
@@ -44,11 +57,14 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
                  'qemu-img'
             ] %}
         {% endif %}
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+    {% elif base_package_type == 'deb' %}
         {% set cinder_base_packages = [
                 'ceph-common',
                 'lvm2',
                 'cryptsetup',
+                'python3-cephfs',
+                'python3-rados',
+                'python3-rbd',
                 'qemu-utils'
         ] %}
     {% endif %}

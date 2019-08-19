@@ -6,20 +6,50 @@
         - kolla-build-centos-source
         - kolla-ansible-centos-source
         - kolla-ansible-centos-binary
+        - kolla-ansible-centos-source-upgrade
         - tripleo-build-containers-centos-7:
+            # FIXME(yoctozepto): set to voting when TripleO CI is fixed
             voting: false
             files:
+              - ^.zuul.d/centos.yaml$
               - ^docker/.*$
               - ^kolla/.*$
+              - ^requirements.txt$
+              - ^setup.cfg$
+              - ^setup.py$
         - kolla-ansible-bifrost-centos-source:
-            files: ^docker\/bifrost\/.*
+            files: ^docker\/(base|bifrost|openstack-base)\/.*
+        # Test rabbitmq & mariadb changes in multinode ceph jobs.
+        - kolla-ansible-centos-source-ceph:
+            files: ^docker\/(base|ceph|cinder|glance|mariadb|openstack-base|rabbitmq)\/.*
+        - kolla-ansible-centos-source-upgrade-ceph:
+            files: ^docker\/(base|ceph|cinder|glance|mariadb|openstack-base|rabbitmq)\/.*
+        - kolla-ansible-centos-source-cinder-lvm:
+            files: ^docker\/(base|cinder|iscsid|openstack-base)\/.*
+        - kolla-ansible-centos-source-scenario-nfv:
+            files: ^docker\/(base|barbican|heat|mistral|openstack-base|redis|tacker)\/.*
+        - kolla-ansible-centos-source-ironic:
+            files: ^docker\/(base|dnsmasq|ironic|ironic-inspector|iscsid|openstack-base)\/.*
     gate:
+      queue: kolla
       jobs:
         - kolla-build-centos-source
+        - tripleo-build-containers-centos-7:
+            # FIXME(yoctozepto): set to voting when TripleO CI is fixed
+            voting: false
+            files:
+              - ^.zuul.d/centos.yaml$
+              - ^docker/.*$
+              - ^kolla/.*$
+              - ^requirements.txt$
+              - ^setup.cfg$
+              - ^setup.py$
     periodic:
       jobs:
-        - kolla-publish-centos-source
-        - kolla-publish-centos-binary
+        - kolla-publish-centos-source:
+            branches: ^(?!stable/ocata).*$
+        - kolla-publish-centos-binary:
+            branches: ^(?!stable/ocata).*$
     release:
       jobs:
         - kolla-publish-centos-source

@@ -7,7 +7,7 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
 
 {{ macros.configure_user(name='monasca', homedir='/usr/share/grafana') }}
 
-{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+{% if base_package_type == 'rpm' %}
     {% set monasca_grafana_build_packages = [
         'golang',
         'git',
@@ -20,7 +20,7 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
         'fontconfig',
         'rpm-build'
      ] %}
-{% elif base_distro in ['debian', 'ubuntu'] %}
+{% elif base_package_type == 'deb' %}
     {% set monasca_grafana_build_packages = [
         'golang',
         'git',
@@ -44,11 +44,11 @@ COPY extend_start.sh /usr/local/bin/kolla_extend_start
 
 ENV GO_PATH=/grafana
 ENV monasca_grafana_build_path=${GO_PATH}/src/github.com/grafana/grafana
-ARG monasca_grafana_version=grafana4
+ARG monasca_grafana_version=grafana4_2
 ARG monasca_grafana_url=https://github.com/monasca/grafana/archive/$monasca_grafana_version.tar.gz
 
 {% block monasca_grafana_install %}
-RUN gem install fpm \
+RUN gem install rake fpm \
     && curl -sSL -o /tmp/monasca-grafana.tgz ${monasca_grafana_url} \
     && mkdir -p ${monasca_grafana_build_path} \
     && tar --strip 1 -xvf /tmp/monasca-grafana.tgz -C ${monasca_grafana_build_path} \
@@ -60,9 +60,9 @@ RUN gem install fpm \
     && mv ${monasca_grafana_build_path}/dist /grafana_pkgs \
     && rm -rf /grafana
 
-{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+{% if base_package_type == 'rpm' %}
   {% set monasca_grafana_packages = ['/grafana_pkgs/grafana*.rpm'] %}
-{% elif base_distro in ['debian', 'ubuntu'] %}
+{% elif base_package_type == 'deb' %}
   {% set monasca_grafana_packages = ['/grafana_pkgs/grafana*.deb'] %}
 {% endif %}
 

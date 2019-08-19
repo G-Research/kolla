@@ -8,28 +8,40 @@ USER root
 {% import "macros.j2" as macros with context %}
 
 {% if install_type == 'binary' %}
-    {% set neutron_server_opendaylight_packages = [
-        'python-networking-odl',
-        'python-networking-bgpvpn',
-        'python-networking-l2gw'
-    ] %}
-
-{% if base_distro in ['centos', 'rhel'] %}
-    {% set neutron_server_opendaylight_packages = neutron_server_opendaylight_packages + [
-        'python-networking-bgpvpn-heat'
-    ] %}
-{% endif %}
+    {% if base_package_type == 'rpm' %}
+        {% if distro_python_version.startswith('3') %}
+        {% set neutron_server_opendaylight_packages = [
+            'python3-networking-bgpvpn',
+            'python3-networking-bgpvpn-heat',
+            'python3-networking-l2gw',
+            'python3-networking-odl'
+        ] %}
+        {% else %}
+        {% set neutron_server_opendaylight_packages = [
+            'python-networking-bgpvpn',
+            'python-networking-bgpvpn-heat',
+            'python-networking-l2gw',
+            'python-networking-odl'
+        ] %}
+        {% endif %}
+    {% elif base_package_type == 'deb' %}
+        {% set neutron_server_opendaylight_packages = [
+            'python3-networking-bgpvpn',
+            'python3-networking-l2gw',
+            'python3-networking-odl'
+        ] %}
+    {% endif %}
 
 {{ macros.install_packages(neutron_server_opendaylight_packages | customizable("packages")) }}
 
 {% elif install_type == 'source' %}
 
     {% if base_arch not in ['x86_64'] %}
-        {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+        {% if base_package_type == 'rpm' %}
             {% set neutron_server_opendaylight_packages = [
                 'libjpeg-devel'
             ] %}
-        {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% elif base_package_type == 'deb' %}
             {% set neutron_server_opendaylight_packages = [
                 'libjpeg-dev'
             ] %}

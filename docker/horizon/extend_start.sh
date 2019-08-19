@@ -3,11 +3,27 @@
 set -o errexit
 
 FORCE_GENERATE="${FORCE_GENERATE}"
+HASH_PATH=/var/lib/kolla/.settings.md5sum.txt
+
+# TODO(mgoddard): Remove this elif when Ubuntu has distro_python_version == 3.
+if [[ ${KOLLA_INSTALL_TYPE} == "binary" ]] && [[ "${KOLLA_BASE_DISTRO}" =~ ubuntu ]]; then
+    KOLLA_DISTRO_PYTHON_VERSION=3
+fi
 
 if [[ ${KOLLA_INSTALL_TYPE} == "binary" ]]; then
-    SITE_PACKAGES="/usr/lib/python2.7/site-packages"
+    if [[ ${KOLLA_BASE_DISTRO} == "debian" ]] || [[ ${KOLLA_BASE_DISTRO} == "ubuntu" ]]; then
+        SITE_PACKAGES="/usr/lib/python3/dist-packages"
+    else
+        SITE_PACKAGES="/usr/lib/python${KOLLA_DISTRO_PYTHON_VERSION}/site-packages"
+    fi
 elif [[ ${KOLLA_INSTALL_TYPE} == "source" ]]; then
-    SITE_PACKAGES="/var/lib/kolla/venv/lib/python2.7/site-packages"
+    SITE_PACKAGES="/var/lib/kolla/venv/lib/python${KOLLA_DISTRO_PYTHON_VERSION}/site-packages"
+fi
+
+if [[ -f "/var/lib/kolla/venv/bin/python" ]]; then
+    MANAGE_PY="/var/lib/kolla/venv/bin/python /var/lib/kolla/venv/bin/manage.py"
+else
+    MANAGE_PY="/usr/bin/python${KOLLA_DISTRO_PYTHON_VERSION} /usr/bin/manage.py"
 fi
 
 if [[ ${KOLLA_INSTALL_TYPE} == "source" ]] && [[ ! -f ${SITE_PACKAGES}/openstack_dashboard/local/local_settings.py ]]; then
@@ -29,10 +45,6 @@ fi
 # Bootstrap and exit if KOLLA_BOOTSTRAP variable is set. This catches all cases
 # of the KOLLA_BOOTSTRAP variable being set, including empty.
 if [[ "${!KOLLA_BOOTSTRAP[@]}" ]]; then
-    MANAGE_PY="/usr/bin/python /usr/bin/manage.py"
-    if [[ -f "/var/lib/kolla/venv/bin/python" ]]; then
-        MANAGE_PY="/var/lib/kolla/venv/bin/python /var/lib/kolla/venv/bin/manage.py"
-    fi
     $MANAGE_PY migrate --noinput
     exit 0
 fi
@@ -145,6 +157,20 @@ function config_manila_ui {
     done
 }
 
+function config_masakari_dashboard {
+    for file in ${SITE_PACKAGES}/masakaridashboard/local/enabled/_*[^__].py; do
+        config_dashboard "${ENABLE_MASAKARI}" \
+            "${SITE_PACKAGES}/masakaridashboard/local/enabled/${file##*/}" \
+            "${SITE_PACKAGES}/openstack_dashboard/local/enabled/${file##*/}"
+    done
+    config_dashboard "${ENABLE_MASAKARI}"\
+        "${SITE_PACKAGES}/masakaridashboard/conf/masakari_policy.json" \
+        "${SITE_PACKAGES}/openstack_dashboard/conf/masakari_policy.json"
+    config_dashboard "${ENABLE_MASAKARI}"\
+        "${SITE_PACKAGES}/masakaridashboard/local/local_settings.d/_50_masakari.py" \
+        "${SITE_PACKAGES}/openstack_dashboard/local/local_settings.d/_50_masakari.py"
+}
+
 function config_murano_dashboard {
     for file in ${SITE_PACKAGES}/muranodashboard/local/enabled/_*[^__].py; do
         config_dashboard "${ENABLE_MURANO}" \
@@ -166,12 +192,6 @@ function config_mistral_dashboard {
         "${SITE_PACKAGES}/openstack_dashboard/local/enabled/_50_mistral.py"
 }
 
-function config_neutron_lbaas {
-    config_dashboard "${ENABLE_NEUTRON_LBAAS}" \
-        "${SITE_PACKAGES}/neutron_lbaas_dashboard/enabled/_1481_project_ng_loadbalancersv2_panel.py" \
-        "${SITE_PACKAGES}/openstack_dashboard/local/enabled/_1481_project_ng_loadbalancersv2_panel.py"
-}
-
 function config_neutron_vpnaas_dashboard {
     config_dashboard "${ENABLE_NEUTRON_VPNAAS}" \
         "${SITE_PACKAGES}/neutron_vpnaas_dashboard/enabled/_7100_project_vpn_panel.py" \
@@ -182,6 +202,14 @@ function config_octavia_dashboard {
     config_dashboard "${ENABLE_OCTAVIA}" \
         "${SITE_PACKAGES}/octavia_dashboard/enabled/_1482_project_load_balancer_panel.py" \
         "${SITE_PACKAGES}/openstack_dashboard/local/enabled/_1482_project_load_balancer_panel.py"
+}
+
+function config_qinling_dashboard {
+    for file in ${SITE_PACKAGES}/qinling_dashboard/enabled/_*[^__].py; do
+        config_dashboard "${ENABLE_QINLING}" \
+            "${SITE_PACKAGES}/qinling_dashboard/enabled/${file##*/}" \
+            "${SITE_PACKAGES}/openstack_dashboard/local/enabled/${file##*/}"
+    done
 }
 
 function config_sahara_dashboard {
@@ -292,11 +320,9 @@ function settings_bundle {
 
 function settings_changed {
     changed=1
-    hash_path=/var/lib/kolla/.settings.md5sum.txt
 
-    if [[ ! -f $hash_path  ]] || ! settings_bundle | md5sum -c --status $hash_path || [[ $FORCE_GENERATE == yes ]]; then
+    if [[ ! -f $HASH_PATH  ]] || ! settings_bundle | md5sum -c --status $HASH_PATH || [[ $FORCE_GENERATE == yes ]]; then
         changed=0
-        settings_bundle | md5sum > $hash_path
     fi
 
     return ${changed}
@@ -313,11 +339,12 @@ config_ironic_dashboard
 config_karbor_dashboard
 config_magnum_dashboard
 config_manila_ui
+config_masakari_dashboard
 config_mistral_dashboard
 config_murano_dashboard
-config_neutron_lbaas
 config_neutron_vpnaas_dashboard
 config_octavia_dashboard
+config_qinling_dashboard
 config_sahara_dashboard
 config_searchlight_ui
 config_senlin_dashboard
@@ -334,19 +361,16 @@ config_zun_dashboard
 if [[ "${KOLLA_BASE_DISTRO}" =~ debian|ubuntu ]]; then
     # Loading Apache2 ENV variables
     . /etc/apache2/envvars
+    install -d /var/run/apache2/
     rm -rf /var/run/apache2/*
 else
     rm -rf /var/run/httpd/* /run/httpd/* /tmp/httpd*
 fi
 
 if settings_changed; then
-    if [[ "${KOLLA_INSTALL_TYPE}" == "binary" ]]; then
-        /usr/bin/manage.py collectstatic --noinput --clear
-        /usr/bin/manage.py compress --force
-    elif [[ "${KOLLA_INSTALL_TYPE}" == "source" ]]; then
-        /var/lib/kolla/venv/bin/python /var/lib/kolla/venv/bin/manage.py collectstatic --noinput --clear
-        /var/lib/kolla/venv/bin/python /var/lib/kolla/venv/bin/manage.py compress --force
-    fi
+    ${MANAGE_PY} collectstatic --noinput --clear
+    ${MANAGE_PY} compress --force
+    settings_bundle | md5sum > $HASH_PATH
 fi
 
 # NOTE(sbezverk) since Horizon is now storing logs in its own location, /var/log/horizon

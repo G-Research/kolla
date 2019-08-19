@@ -48,9 +48,9 @@ project. The three deliverables that make up the Kolla project are:
 ================   =========================================================
 Deliverable        Repository
 ================   =========================================================
-kolla              https://git.openstack.org/cgit/openstack/kolla
-kolla-ansible      https://git.openstack.org/cgit/openstack/kolla-ansible
-kolla-cli          https://git.openstack.org/cgit/openstack/kolla-cli
+kolla              https://opendev.org/openstack/kolla
+kolla-ansible      https://opendev.org/openstack/kolla-ansible
+kolla-cli          https://opendev.org/openstack/kolla-cli
 ================   =========================================================
 
 The `Docker images <https://docs.docker.com/storage/storagedriver/>`__
@@ -80,6 +80,7 @@ Kolla provides images to deploy the following OpenStack projects:
 - `Cinder <https://docs.openstack.org/cinder/latest/>`__
 - `CloudKitty <https://docs.openstack.org/cloudkitty/latest/>`__
 - `Congress <https://docs.openstack.org/congress/latest/>`__
+- `Cyborg <https://docs.openstack.org/cyborg/latest/>`__
 - `Designate <https://docs.openstack.org/designate/latest/>`__
 - `Dragonflow <https://docs.openstack.org/dragonflow/latest/>`__
 - `EC2-API <https://wiki.openstack.org/wiki/EC2API>`__
@@ -93,6 +94,7 @@ Kolla provides images to deploy the following OpenStack projects:
 - `Kuryr <https://docs.openstack.org/kuryr/latest/>`__
 - `Magnum <https://docs.openstack.org/magnum/latest/>`__
 - `Manila <https://docs.openstack.org/manila/latest/>`__
+- `Masakari <https://docs.openstack.org/masakari/latest/>`__
 - `Mistral <https://docs.openstack.org/mistral/latest/>`__
 - `Monasca <https://docs.openstack.org/monasca-api/latest/>`__
 - `Murano <https://docs.openstack.org/murano/latest/>`__
@@ -100,6 +102,7 @@ Kolla provides images to deploy the following OpenStack projects:
 - `Nova <https://docs.openstack.org/nova/latest/>`__
 - `Octavia <https://docs.openstack.org/octavia/latest/>`__
 - `Panko <https://docs.openstack.org/panko/latest/>`__
+- `Qinling <https://docs.openstack.org/qinling/latest/>`__
 - `Rally <https://docs.openstack.org/rally/latest/>`__
 - `Sahara <https://docs.openstack.org/sahara/latest/>`__
 - `Searchlight <https://docs.openstack.org/searchlight/latest/>`__
@@ -128,6 +131,8 @@ Kolla provides images to deploy the following infrastructure components:
 - `Collectd <https://collectd.org>`__,
   `InfluxDB <https://influxdata.com/time-series-platform/influxdb/>`__, and
   `Grafana <https://grafana.org>`__ for performance monitoring.
+- `Corosync <https://clusterlabs.org/corosync.html>`__ and
+  `Pacemaker <https://clusterlabs.org/pacemaker>`__ for HAcluster.
 - `Elasticsearch <https://www.elastic.co/de/products/elasticsearch>`__ and
   `Kibana <https://www.elastic.co/products/kibana>`__ to search, analyze,
   and visualize log messages.
@@ -177,10 +182,14 @@ Directories
 -  ``etc`` - Contains a reference etc directory structure which requires
    configuration of a small number of configuration variables to build
    docker images.
--  ``tests`` - Contains functional testing tools.
--  ``tools`` - Contains tools for interacting with the kolla repository.
+-  ``kolla`` - Contains Python modules for kolla image build system.
+-  ``releasenotes`` - Contains the releasenote for all added features
+   in kolla.
+-  ``roles`` - Contains Ansible roles used in CI.
 -  ``specs`` - Contains the Kolla communities key arguments about
    architectural shifts in the code base.
+-  ``tests`` - Contains functional testing tools.
+-  ``tools`` - Contains tools for interacting with the kolla repository.
 
 Getting Involved
 ================
@@ -194,7 +203,7 @@ workflow <https://docs.openstack.org/infra/manual/developers.html>`__.
    `Launchpad <https://launchpad.net/kolla>`__.
 -  Attend weekly
    `meetings <https://wiki.openstack.org/wiki/Meetings/Kolla>`__.
--  Contribute `code <https://git.openstack.org/cgit/openstack/kolla>`__.
+-  Contribute `code <https://opendev.org/openstack/kolla>`__.
 
 Contributors
 ============

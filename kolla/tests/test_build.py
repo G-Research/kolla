@@ -316,7 +316,7 @@ class KollaWorkerTest(base.TestCase):
         expected_plugin = {
             'name': 'neutron-server-plugin-networking-arista',
             'reference': 'master',
-            'source': 'https://git.openstack.org/openstack/networking-arista',
+            'source': 'https://opendev.org/x/networking-arista',
             'type': 'git'
         }
 
@@ -381,6 +381,110 @@ class KollaWorkerTest(base.TestCase):
         kolla = build.KollaWorker(self.conf)
         self.assertEqual(2, len(kolla.rpm_setup))
 
+    def test_build_distro_python_version_debian(self):
+        """check distro_python_version for Debian"""
+        self.conf.set_override('base', 'debian')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('3.7', kolla.distro_python_version)
+
+    def test_build_distro_python_version_rhel80(self):
+        """check distro_python_version for RHEL8.0"""
+        self.conf.set_override('base', 'rhel')
+        self.conf.set_override('base_tag', '8.0')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('3.6', kolla.distro_python_version)
+
+    def test_build_distro_python_version_rhel8(self):
+        """check distro_python_version for RHEL8"""
+        self.conf.set_override('base', 'rhel')
+        self.conf.set_override('base_tag', '8')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('3.6', kolla.distro_python_version)
+
+    def test_build_distro_python_version_ubuntu(self):
+        """check distro_python_version for Ubuntu"""
+        self.conf.set_override('base', 'ubuntu')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('3.6', kolla.distro_python_version)
+
+    def test_build_distro_python_version_centos7(self):
+        """check distro_python_version for CentOS 7.6.1810"""
+        self.conf.set_override('base', 'centos')
+        self.conf.set_override('base_tag', '7.6.1810')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('2.7', kolla.distro_python_version)
+
+    def test_build_distro_python_version_rhel7(self):
+        """check distro_python_version for RHEL7"""
+        self.conf.set_override('base', 'rhel')
+        self.conf.set_override('base_tag', '7')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('2.7', kolla.distro_python_version)
+
+    def test_build_distro_package_manager(self):
+        """check distro_package_manager conf value is taken"""
+        self.conf.set_override('distro_package_manager', 'foo')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('foo', kolla.distro_package_manager)
+
+    def test_build_distro_package_manager_rhel8(self):
+        """check distro_package_manager dnf for rhel8"""
+        self.conf.set_override('base', 'rhel')
+        self.conf.set_override('base_tag', '8')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('dnf', kolla.distro_package_manager)
+
+    def test_build_distro_package_manager_rhel8_minor(self):
+        """check distro_package_manager dnf for rhel8"""
+        self.conf.set_override('base', 'rhel')
+        self.conf.set_override('base_tag', '8.1.2')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('dnf', kolla.distro_package_manager)
+
+    def test_build_distro_package_manager_rhel7(self):
+        """check distro_package_manager yum for rhel7"""
+        self.conf.set_override('base', 'rhel')
+        self.conf.set_override('base_tag', '7')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('yum', kolla.distro_package_manager)
+
+    def test_build_distro_package_manager_rhel7_minor(self):
+        """check distro_package_manager yum for rhel7"""
+        self.conf.set_override('base', 'rhel')
+        self.conf.set_override('base_tag', '7.6.1801')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('yum', kolla.distro_package_manager)
+
+    def test_build_distro_package_manager_debian(self):
+        """check distro_package_manager apt for debian"""
+        self.conf.set_override('base', 'debian')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('apt', kolla.distro_package_manager)
+
+    def test_build_distro_package_manager_ubuntu(self):
+        """check distro_package_manager apt for ubuntu"""
+        self.conf.set_override('base', 'ubuntu')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('apt', kolla.distro_package_manager)
+
+    def test_base_package_type(self):
+        """check base_package_type conf value is taken"""
+        self.conf.set_override('base_package_type', 'pip')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('pip', kolla.base_package_type)
+
+    def test_base_package_type_rhel(self):
+        """check base_package_type rpm for rhel"""
+        self.conf.set_override('base', 'rhel')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('rpm', kolla.base_package_type)
+
+    def test_base_package_type_debian(self):
+        """check base_package_type deb for debian"""
+        self.conf.set_override('base', 'debian')
+        kolla = build.KollaWorker(self.conf)
+        self.assertEqual('deb', kolla.base_package_type)
+
     def test_pre_defined_exist_profile(self):
         # default profile include the fake image: image-base
         self.conf.set_override('profile', ['default'])
@@ -437,14 +541,14 @@ class MainTest(base.TestCase):
 
     @mock.patch.object(build, 'run_build')
     def test_images_built(self, mock_run_build):
-        image_statuses = ({}, {'img': 'built'}, {}, {})
+        image_statuses = ({}, {'img': 'built'}, {}, {}, {})
         mock_run_build.return_value = image_statuses
         result = build_cmd.main()
         self.assertEqual(0, result)
 
     @mock.patch.object(build, 'run_build')
     def test_images_unmatched(self, mock_run_build):
-        image_statuses = ({}, {}, {'img': 'unmatched'}, {})
+        image_statuses = ({}, {}, {'img': 'unmatched'}, {}, {})
         mock_run_build.return_value = image_statuses
         result = build_cmd.main()
         self.assertEqual(0, result)
@@ -457,7 +561,7 @@ class MainTest(base.TestCase):
 
     @mock.patch.object(build, 'run_build')
     def test_bad_images(self, mock_run_build):
-        image_statuses = ({'img': 'error'}, {}, {}, {})
+        image_statuses = ({'img': 'error'}, {}, {}, {}, {})
         mock_run_build.return_value = image_statuses
         result = build_cmd.main()
         self.assertEqual(1, result)
@@ -470,7 +574,14 @@ class MainTest(base.TestCase):
 
     @mock.patch.object(build, 'run_build')
     def test_skipped_images(self, mock_run_build):
-        image_statuses = ({}, {}, {}, {'img': 'skipped'})
+        image_statuses = ({}, {}, {}, {'img': 'skipped'}, {})
+        mock_run_build.return_value = image_statuses
+        result = build_cmd.main()
+        self.assertEqual(0, result)
+
+    @mock.patch.object(build, 'run_build')
+    def test_unbuildable_images(self, mock_run_build):
+        image_statuses = ({}, {}, {}, {}, {'img': 'unbuildable'})
         mock_run_build.return_value = image_statuses
         result = build_cmd.main()
         self.assertEqual(0, result)

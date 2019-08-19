@@ -6,10 +6,9 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
 {% import "macros.j2" as macros with context %}
 
 {% if install_type == 'binary' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% if base_package_type == 'rpm' %}
         # TODO(Jeffrey4l): no python-oneviewclient
         {% set ironic_conductor_packages = [
-            'ansible',
             'dosfstools',
             'e2fsprogs',
             'gdisk',
@@ -18,19 +17,36 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
             'openstack-ironic-staging-drivers',
             'parted',
             'psmisc',
+            'shellinabox',
+            'util-linux',
+            'xfsprogs'
+        ] %}
+
+        {% if distro_python_version.startswith('3') %}
+        {% set ironic_conductor_packages = ironic_conductor_packages + [
+            'python3dist\(ansible\)',
+            'python3-dracclient',
+            'python3-ironic-inspector-client',
+            'python3-proliantutils',
+            'python3-pysnmp',
+            'python3-scciclient',
+            'python3-sushy',
+            'python3-systemd'
+        ] %}
+        {% else %}
+        {% set ironic_conductor_packages = ironic_conductor_packages + [
+            'ansible',
             'pysnmp',
-            'python2-ImcSdk',
+            'python-UcsSdk',
             'python-dracclient',
             'python-ironic-inspector-client',
             'python-proliantutils',
             'python-scciclient',
             'python-sushy',
-            'python-UcsSdk',
-            'shellinabox',
-            'systemd-python',
-            'util-linux',
-            'xfsprogs',
+            'python2-ImcSdk',
+            'systemd-python'
         ] %}
+        {% endif %}
         {% if base_distro in ['centos', 'oraclelinux'] %}
             {% set ironic_conductor_packages = ironic_conductor_packages + [
                 'qemu-img-ev'
@@ -40,7 +56,7 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
                 'qemu-img'
             ] %}
         {% endif %}
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+    {% elif base_package_type == 'deb' %}
         # TODO(jeffrey4l): no python-dracclient, python-oneviewclient, UcsSdk,
         # ImcSdk package, python-sushy, ironic-staging-drivers
         {% set ironic_conductor_packages = [
@@ -53,18 +69,19 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
             'ironic-conductor',
             'parted',
             'psmisc',
-            'python-ironic-inspector-client',
-            'python-proliantutils',
-            'python-pysnmp4',
-            'python-scciclient',
-            'python-systemd',
+            'python3-ironic-inspector-client',
+            'python3-proliantutils',
+            'python3-pysnmp4',
+            'python3-scciclient',
+            'python3-systemd',
             'qemu-utils',
             'shellinabox',
+            'udev',
             'xfsprogs',
         ] %}
     {% endif %}
 {% elif install_type == 'source' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% if base_package_type == 'rpm' %}
         {% set ironic_conductor_packages = [
             'dosfstools',
             'e2fsprogs',
@@ -78,7 +95,16 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
             'util-linux',
             'xfsprogs',
         ] %}
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% if distro_python_version.startswith('3') %}
+        {% set ironic_conductor_packages = ironic_conductor_packages + [
+            'systemd-udev',
+        ] %}
+        {% else %}
+        {% set ironic_conductor_packages = ironic_conductor_packages + [
+            'systemd',
+        ] %}
+        {% endif %}
+    {% elif base_package_type == 'deb' %}
         {% set ironic_conductor_packages = [
             'bsdmainutils',
             'dosfstools',
@@ -89,6 +115,7 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
             'psmisc',
             'qemu-utils',
             'shellinabox',
+            'udev',
             'xfsprogs',
         ] %}
     {% endif %}

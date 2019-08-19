@@ -6,20 +6,26 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
 {% import "macros.j2" as macros with context %}
 
 {% if install_type == 'binary' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
-
+    {% if base_package_type == 'rpm' %}
         {% set neutron_server_packages = [
             'openstack-neutron-vpnaas',
-            'python-networking-generic-switch',
         ] %}
 
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% if distro_python_version.startswith('3') %}
+        {% set neutron_server_packages = neutron_server_packages + [
+            'python3-networking-generic-switch'
+        ] %}
+        {% else %}
+        {% set neutron_server_packages = neutron_server_packages + [
+            'python-networking-generic-switch'
+        ] %}
+        {% endif %}
+
+    {% elif base_package_type == 'deb' %}
 
         {% set neutron_server_packages = [
-            'neutron-lbaasv2-agent',
-            'python-neutron-dynamic-routing',
-            'python-neutron-lbaas',
-            'python-neutron-vpnaas'
+            'python3-neutron-dynamic-routing',
+            'python3-neutron-vpnaas'
         ] %}
 
     {% endif %}

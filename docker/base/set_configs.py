@@ -235,7 +235,7 @@ def validate_config(config):
     # Validate config sections
     for data in config.get('config_files', list()):
         # Verify required keys exist.
-        if not data.viewkeys() >= required_keys:
+        if not set(data.keys()) >= required_keys:
             message = 'Config is missing required keys: %s' % required_keys
             raise InvalidConfig(message)
         if ('owner' not in data or 'perm' not in data) \
@@ -310,8 +310,14 @@ def copy_config(config):
     LOG.info('Writing out command to execute')
     LOG.debug("Command is: %s", config['command'])
     # The value from the 'command' key will be written to '/run_command'
-    with open('/run_command', 'w+') as f:
+    cmd = '/run_command'
+    with open(cmd, 'w+') as f:
         f.write(config['command'])
+    # Make sure the generated file is readable by all users
+    try:
+        os.chmod(cmd, 0o644)
+    except OSError:
+        LOG.exception('Failed to set permission of %s to 0o644', cmd)
 
 
 def user_group(owner):

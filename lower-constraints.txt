@@ -10,7 +10,7 @@ chardet==3.0.4
 cliff==2.11.0
 cmd2==0.8.1
 coverage==4.0
-cryptography==1.9
+cryptography==2.1.4
 ddt==1.0.1
 debtcollector==1.19.0
 decorator==4.2.1
@@ -57,7 +57,6 @@ oslo.utils==3.33.0
 oslotest==3.2.0
 packaging==17.1
 pbr==2.0.0
-pep8==1.5.7
 prettytable==0.7.1
 pycparser==2.18
 pyflakes==0.8.1
@@ -81,14 +80,14 @@ pytz==2013.6
 PyYAML==3.10
 requests==2.18.4
 requestsexceptions==1.4.0
-rfc3986==1.1.0
-setuptools==16.0
+rfc3986==1.2.0
+setuptools==21.0
 simplejson==3.13.2
 six==1.10.0
 smmap2==2.0.3
 smmap==0.9.0
 stevedore==1.28.0
-testrepository==0.0.18
+stestr==2.2.0
 testscenarios==0.4
 testtools==2.2.0
 traceback2==1.4.0

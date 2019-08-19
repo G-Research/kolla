@@ -7,6 +7,32 @@ if [[ $(stat -c %a /var/log/kolla/ceph) != "755" ]]; then
     chmod 755 /var/log/kolla/ceph
 fi
 
+# Inform the os about partition table changes
+function partprobe_device {
+    local device=$1
+    udevadm settle --timeout=600
+    flock -s ${device} partprobe ${device}
+    udevadm settle --timeout=600
+}
+
+# In some cases, the disk partition will not appear immediately, so check every
+# 1s, try up to 10 times. In general, this interval is enough.
+function wait_partition_appear {
+    local dev_part=$1
+    local part_name=$(echo ${dev_part} | awk -F '/' '{print $NF}')
+    for(( i=1; i<11; i++ )); do
+        flag=$(ls /dev | awk '/'"${part_name}"'/{print $0}' | wc -l)
+        if [[ "${flag}" -eq 0 ]]; then
+            echo "sleep 1 waits for the partition ${dev_part} to appear: ${i}"
+            sleep 1
+        else
+            return 0
+        fi
+    done
+    echo "The device /dev/${dev_part} does not appear within the limited time 10s."
+    exit 1
+}
+
 # Bootstrap and exit if KOLLA_BOOTSTRAP variable is set. This catches all cases
 # of the KOLLA_BOOTSTRAP variable being set, including empty.
 if [[ "${!KOLLA_BOOTSTRAP[@]}" ]]; then
@@ -38,7 +64,15 @@ if [[ "${!KOLLA_BOOTSTRAP[@]}" ]]; then
                 sgdisk --zap-all -- "${OSD_BS_DEV}"
                 sgdisk --new=1:0:+100M --mbrtogpt -- "${OSD_BS_DEV}"
                 sgdisk --largest-new=2 --mbrtogpt -- "${OSD_BS_DEV}"
-                sgdisk --zap-all -- "${OSD_BS_DEV}"2
+                partprobe_device "${OSD_BS_DEV}"
+
+                if [[ "${OSD_BS_DEV}" =~ "/dev/loop" ]]; then
+                    wait_partition_appear "${OSD_BS_DEV}"p2
+                    sgdisk --zap-all -- "${OSD_BS_DEV}"p2
+                else
+                    wait_partition_appear "${OSD_BS_DEV}"2
+                    sgdisk --zap-all -- "${OSD_BS_DEV}"2
+                fi
             fi
 
             if [ -n "${OSD_BS_WAL_DEV}" ] && [ "${OSD_BS_BLK_DEV}" != "${OSD_BS_WAL_DEV}" ] && [ -n "${OSD_BS_WAL_PARTNUM}" ]; then
@@ -82,8 +116,14 @@ if [[ "${!KOLLA_BOOTSTRAP[@]}" ]]; then
 
         # This will through an error about no key existing. That is normal. It then
         # creates the key in the next step.
-        ceph-osd -i "${OSD_ID}" --mkkey
         echo "bluestore" > "${OSD_DIR}"/type
+
+        if [[ "$(ceph --version)" =~ (luminous|mimic) ]]; then
+            ceph-osd -i "${OSD_ID}" --mkkey
+        else
+            ceph-osd -i "${OSD_ID}" --mkkey --no-mon-config
+        fi
+
         if [ -n "${OSD_BS_BLK_DEV}" ] && [ "${OSD_BS_BLK_DEV}" != "${OSD_BS_DEV}" ] && [ -n "${OSD_BS_BLK_PARTNUM}" ]; then
             sgdisk "--change-name="${OSD_BS_BLK_PARTNUM}":KOLLA_CEPH_DATA_BS_${OSD_ID}_B" "--typecode="${OSD_BS_BLK_PARTNUM}":${CEPH_OSD_TYPE_CODE}" -- "${OSD_BS_BLK_DEV}"
         else
@@ -110,8 +150,14 @@ if [[ "${!KOLLA_BOOTSTRAP[@]}" ]]; then
             ln -sf /dev/disk/by-partlabel/KOLLA_CEPH_DATA_BS_"${OSD_ID}"_D "${OSD_DIR}"/block.db
         fi
 
-        ceph-osd -i "${OSD_ID}" --mkfs -k "${OSD_DIR}"/keyring --osd-uuid "${OSD_UUID}"
+        if [[ "$(ceph --version)" =~ (luminous|mimic) ]]; then
+            ceph-osd -i "${OSD_ID}" --mkfs -k "${OSD_DIR}"/keyring --osd-uuid "${OSD_UUID}"
+        else
+            ceph-osd -i "${OSD_ID}" --mkfs -k "${OSD_DIR}"/keyring --osd-uuid "${OSD_UUID}" --no-mon-config
+        fi
+
         ceph auth add "osd.${OSD_ID}" osd 'allow *' mon 'allow profile osd' -i "${OSD_DIR}/keyring"
+
         if [[ "${OSD_BS_DEV}" =~ "/dev/loop" ]]; then
             umount "${OSD_BS_DEV}""p${OSD_BS_PARTNUM}"
         else
@@ -133,7 +179,12 @@ if [[ "${!KOLLA_BOOTSTRAP[@]}" ]]; then
 
         # This will through an error about no key existing. That is normal. It then
         # creates the key in the next step.
-        ceph-osd -i "${OSD_ID}" --mkfs --osd-journal="${JOURNAL_PARTITION}" --mkkey
+        if [[ "$(ceph --version)" =~ (luminous|mimic) ]]; then
+            ceph-osd -i "${OSD_ID}" --mkfs --osd-journal="${JOURNAL_PARTITION}" --mkkey
+        else
+            ceph-osd -i "${OSD_ID}" --mkfs --osd-journal="${JOURNAL_PARTITION}" --mkkey --no-mon-config
+        fi
+
         ceph auth add "osd.${OSD_ID}" osd 'allow *' mon 'allow profile osd' -i "${OSD_DIR}/keyring"
         umount "${OSD_PARTITION}"
     fi
@@ -148,8 +199,12 @@ if [[ "${!KOLLA_BOOTSTRAP[@]}" ]]; then
 
     # These commands only need to be run once per host but are safe to run
     # repeatedly. This can be improved later or if any problems arise.
-    ceph osd crush add-bucket "${HOSTNAME}${CEPH_ROOT_NAME:+-${CEPH_ROOT_NAME}}" host
-    ceph osd crush move "${HOSTNAME}${CEPH_ROOT_NAME:+-${CEPH_ROOT_NAME}}" root=${CEPH_ROOT_NAME:-default}
+    host_bucket_name="${HOSTNAME}${CEPH_ROOT_NAME:+-${CEPH_ROOT_NAME}}"
+    host_bucket_check=$(ceph osd tree | awk '/'"${host_bucket_name}"'/{print $0}' | wc -l)
+    if [[ "${host_bucket_check}" -eq 0 ]]; then
+        ceph osd crush add-bucket "${host_bucket_name}" host
+        ceph osd crush move "${host_bucket_name}" root=${CEPH_ROOT_NAME:-default}
+    fi
 
     # Adding osd to crush map
     ceph osd crush add "${OSD_ID}" "${OSD_INITIAL_WEIGHT}" host="${HOSTNAME}${CEPH_ROOT_NAME:+-${CEPH_ROOT_NAME}}"

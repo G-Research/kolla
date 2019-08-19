@@ -8,12 +8,16 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
 {{ macros.configure_user(name='horizon') }}
 
 {% if install_type == 'binary' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% if base_package_type == 'rpm' %}
+        {% if distro_python_version.startswith('3') %}
+        {% set horizon_python = 'python3' %}
+        {% else %}
+        {% set horizon_python = 'python2' %}
+        {% endif %}
         {% set horizon_packages = [
                 'gettext',
                 'httpd',
                 'mod_ssl',
-                'mod_wsgi',
                 'openstack-cloudkitty-ui',
                 'openstack-dashboard',
                 'openstack-designate-ui',
@@ -23,47 +27,50 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
                 'openstack-manila-ui',
                 'openstack-mistral-ui',
                 'openstack-murano-ui',
-                'openstack-neutron-lbaas-ui',
                 'openstack-octavia-ui',
                 'openstack-sahara-ui',
                 'openstack-trove-ui',
                 'openstack-vitrage-ui'
         ] %}
+        {% if distro_python_version.startswith('3') %}
+        {% set horizon_packages = horizon_packages + ['python3-mod_wsgi'] %}
+        {% else %}
+        {% set horizon_packages = horizon_packages + ['mod_wsgi'] %}
+        {% endif %}
 
 {{ macros.install_packages(horizon_packages | customizable("packages")) }}
 
 {% block horizon_redhat_binary_setup %}
 RUN sed -i -r 's,^(Listen 80),#\1,' /etc/httpd/conf/httpd.conf \
     && sed -i -r 's,^(Listen 443),#\1,' /etc/httpd/conf.d/ssl.conf \
-    && ln -s /usr/share/openstack-dashboard/openstack_dashboard /usr/lib/python2.7/site-packages/openstack_dashboard \
-    && ln -s /usr/share/openstack-dashboard/static /usr/lib/python2.7/site-packages/static \
+    && ln -s /usr/share/openstack-dashboard/openstack_dashboard /usr/lib/python{{ distro_python_version }}/site-packages/openstack_dashboard \
+    && ln -s /usr/share/openstack-dashboard/static /usr/lib/python{{ distro_python_version }}/site-packages/static \
     && chown -R horizon: /etc/openstack-dashboard /usr/share/openstack-dashboard \
     && chown -R apache: /usr/share/openstack-dashboard/static \
     && sed -i "s|WEBROOT = '/dashboard/'|WEBROOT = '/'|" /etc/openstack-dashboard/local_settings \
     && cp /usr/share/openstack-dashboard/manage.py /usr/bin/manage.py \
     && rm -f /usr/share/openstack-dashboard/openstack_dashboard/local/enabled/?[^_]*.py* \
-    && rm -f /usr/lib/python2.7/site-packages/openstack_dashboard/local/enabled/?[^_]*.py* \
-    && for locale in /usr/lib/python2.7/site-packages/*/locale; do \
-           (cd ${locale%/*} && /usr/bin/python /usr/bin/manage.py compilemessages) \
+    && rm -f /usr/lib/python{{ distro_python_version }}/site-packages/openstack_dashboard/local/enabled/?[^_]*.py* \
+    && for locale in /usr/lib/python{{ distro_python_version }}/site-packages/*/locale; do \
+           (cd ${locale%/*} && /usr/bin/django-admin compilemessages) \
        done
 {% endblock %}
 
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+    {% elif base_package_type == 'deb' %}
         {% set horizon_packages = [
                 'apache2',
                 'gettext',
-                'libapache2-mod-wsgi',
+                'libapache2-mod-wsgi-py3',
                 'locales',
                 'openstack-dashboard',
-                'python-designate-dashboard',
-                'python-heat-dashboard',
-                'python-manila-ui',
-                'python-murano-dashboard',
-                'python-neutron-lbaas-dashboard',
-                'python-sahara-dashboard',
-                'python-trove-dashboard',
+                'python3-designate-dashboard',
+                'python3-heat-dashboard',
+                'python3-manila-ui',
+                'python3-sahara-dashboard',
+                'python3-trove-dashboard',
                 'tzdata'
         ] %}
+	#NOTE(hrw): check for python-murano-dashboard
 
 {{ macros.install_packages(horizon_packages | customizable("packages")) }}
 
@@ -75,21 +82,27 @@ RUN echo > /etc/apache2/ports.conf \
     && cp /usr/share/openstack-dashboard/openstack_dashboard/conf/*.json /etc/openstack-dashboard \
     && cp /usr/share/openstack-dashboard/manage.py /usr/bin/manage.py \
     && rm /etc/apache2/conf-enabled/openstack-dashboard.conf \
-    && for locale in /usr/lib/python2.7/site-packages/*/locale; do \
-           (cd ${locale%/*} && /usr/bin/python /usr/bin/manage.py compilemessages) \
+    && rm /etc/openstack-dashboard/local_settings.py \
+    && ln -s /etc/openstack-dashboard/local_settings /etc/openstack-dashboard/local_settings.py \
+    && for locale in /usr/lib/python3/dist-packages/*/locale; do \
+           (cd ${locale%/*} && /usr/bin/django-admin compilemessages) \
        done
 {% endblock %}
 
     {% endif %}
 {% elif install_type == 'source' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% if base_package_type == 'rpm' %}
 
         {% set horizon_packages = [
                 'gettext',
                 'httpd',
                 'mod_ssl',
-                'mod_wsgi'
         ] %}
+        {% if distro_python_version.startswith('3') %}
+        {% set horizon_packages = horizon_packages + ['python3-mod_wsgi'] %}
+        {% else %}
+        {% set horizon_packages = horizon_packages + ['mod_wsgi'] %}
+        {% endif %}
 
 {{ macros.install_packages(horizon_packages | customizable("packages")) }}
 
@@ -98,12 +111,12 @@ RUN sed -i -r 's,^(Listen 80),#\1,' /etc/httpd/conf/httpd.conf \
     && sed -i -r 's,^(Listen 443),#\1,' /etc/httpd/conf.d/ssl.conf
 {% endblock %}
 
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+    {% elif base_package_type == 'deb' %}
 
         {% set horizon_packages = [
                 'apache2',
                 'gettext',
-                'libapache2-mod-wsgi',
+                'libapache2-mod-wsgi-py3',
                 'locales',
                 'tzdata'
         ] %}
@@ -137,10 +150,10 @@ RUN ln -s horizon-source/* horizon \
     && if [ "$(ls /plugins)" ]; then \
            {{ macros.install_pip(horizon_plugins_pip_packages) }}; \
        fi \
-    && for locale in  /var/lib/kolla/venv/lib/python2.7/site-packages/*/locale; do \
-           (cd ${locale%/*} && /var/lib/kolla/venv/bin/python /var/lib/kolla/venv/bin/manage.py compilemessages) \
+    && for locale in  /var/lib/kolla/venv/lib/python{{distro_python_version}}/site-packages/*/locale; do \
+           (cd ${locale%/*} && /var/lib/kolla/venv/bin/django-admin compilemessages) \
        done \
-    && chown -R horizon: /etc/openstack-dashboard /var/lib/kolla/venv/lib/python2.7/site-packages/static
+    && chown -R horizon: /etc/openstack-dashboard
 
 {% endif %}
 

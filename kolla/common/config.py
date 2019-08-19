@@ -25,16 +25,17 @@ DEFAULT_BASE_TAGS = {
     'centos': '7',
     'rhel': '7',
     'oraclelinux': '7-slim',
-    'debian': 'stretch-backports',
+    'debian': 'buster',
     'ubuntu': '18.04',
 }
 DISTRO_RELEASE = {
     'centos': '7',
     'rhel': '7',
     'oraclelinux': '7',
-    'debian': 'stretch-backports',
+    'debian': 'buster',
     'ubuntu': '18.04',
 }
+OPENSTACK_RELEASE = 'master'
 
 # This is noarch repository so we will use it on all architectures
 DELOREAN = \
@@ -57,6 +58,7 @@ _PROFILE_OPTS = [
                     'etcd',
                     'fluentd',
                     'haproxy',
+                    'hacluster',
                     'keepalived',
                     'kibana',
                     'kolla-toolbox',
@@ -87,6 +89,7 @@ _PROFILE_OPTS = [
                     'keystone',
                     'neutron',
                     'nova-',
+                    'placement',
                     'swift',
                 ],
                 help='Main images'),
@@ -109,12 +112,14 @@ _PROFILE_OPTS = [
                     'kuryr',
                     'magnum',
                     'manila',
+                    'masakari',
                     'mistral',
                     'monasca',
                     'murano',
                     'novajoin',
                     'octavia',
                     'panko',
+                    'qinling',
                     'rally',
                     'redis',
                     'sahara',
@@ -146,6 +151,7 @@ _PROFILE_OPTS = [
                     'memcached',
                     'neutron',
                     'nova-',
+                    'placement',
                     'openvswitch',
                     'rabbitmq',
                 ],
@@ -165,6 +171,7 @@ _PROFILE_OPTS = [
                     'memcached',
                     'neutron',
                     'nova-',
+                    'placement',
                     'openvswitch',
                     'rabbitmq',
                 ],
@@ -184,6 +191,8 @@ _CLI_OPTS = [
     cfg.StrOpt('base-arch', default=hostarch,
                choices=BASE_ARCH,
                help='The base architecture. Default is same as host.'),
+    cfg.BoolOpt('use-dumb-init', default=True,
+                help='Use dumb-init as init system in containers'),
     cfg.BoolOpt('debug', short='d', default=False,
                 help='Turn on debugging log level'),
     cfg.BoolOpt('skip-parents', default=False,
@@ -249,7 +258,8 @@ _CLI_OPTS = [
     cfg.MultiOpt('template-override', types.String(),
                  help='Path to template override file'),
     cfg.MultiOpt('docker-dir', types.String(),
-                 help='Path to additional docker file template directory',
+                 help=('Path to additional docker file template directory,'
+                       ' can be specified multiple times'),
                  short='D', default=[]),
     cfg.StrOpt('logs-dir', help='Path to logs directory'),
     cfg.BoolOpt('pull', default=True,
@@ -260,12 +270,23 @@ _CLI_OPTS = [
                 help=('Squash the image layers. WARNING: it will consume lots'
                       ' of disk IO. "docker-squash" tool is required, install'
                       ' it by "pip install docker-squash"')),
+    cfg.StrOpt('openstack-release', default=OPENSTACK_RELEASE,
+               help='OpenStack release for building kolla-toolbox'),
 ]
 
 _BASE_OPTS = [
     cfg.StrOpt('maintainer',
                default='Kolla Project (https://launchpad.net/kolla)',
                help='Content of the maintainer label'),
+    cfg.StrOpt('distro_package_manager', default=None,
+               help=('Use this parameter to override the default package '
+                     'manager used by kolla. For example, if you want to use '
+                     'yum on a system with dnf, set this to yum which will '
+                     'use yum command in the build process')),
+    cfg.StrOpt('base_package_type', default=None,
+               help=('Set the package type of the distro. If not set then '
+                     'the packaging type is set to "rpm" if a RHEL based '
+                     'distro and "deb" if a Debian based distro.')),
     cfg.ListOpt('rpm_setup_config', default=[DELOREAN, DELOREAN_DEPS],
                 help=('Comma separated list of .rpm or .repo file(s) '
                       'or URL(s) to install before building containers')),
@@ -274,7 +295,9 @@ _BASE_OPTS = [
     cfg.BoolOpt('squash-cleanup', default=True,
                 help='Remove source image from Docker after squashing'),
     cfg.StrOpt('squash-tmp-dir',
-               help='Temporary directory to be used during squashing')
+               help='Temporary directory to be used during squashing'),
+    cfg.BoolOpt('clean_package_cache', default=True,
+                help='Clean all package cache.')
 ]
 
 
@@ -323,10 +346,10 @@ SOURCES = {
         'type': 'url',
         'location': ('$tarballs_base/cloudkitty/'
                      'cloudkitty-master.tar.gz')},
-    'crane': {
-        'type': 'git',
-        'reference': 'master',
-        'location': ('https://github.com/pulp/crane.git')},
+    'cyborg-base': {
+        'type': 'url',
+        'location': ('$tarballs_base/cyborg/'
+                     'cyborg-master.tar.gz')},
     'designate-base': {
         'type': 'url',
         'location': ('$tarballs_base/designate/'
@@ -408,6 +431,10 @@ SOURCES = {
         'type': 'url',
         'location': ('$tarballs_base/manila-ui/'
                      'manila-ui-master.tar.gz')},
+    'horizon-plugin-masakari-dashboard': {
+        'type': 'url',
+        'location': ('$tarballs_base/masakari-dashboard/'
+                     'masakari-dashboard-master.tar.gz')},
     'horizon-plugin-mistral-dashboard': {
         'type': 'url',
         'location': ('$tarballs_base/mistral-dashboard/'
@@ -420,10 +447,6 @@ SOURCES = {
         'type': 'url',
         'location': ('$tarballs_base/murano-dashboard/'
                      'murano-dashboard-master.tar.gz')},
-    'horizon-plugin-neutron-lbaas-dashboard': {
-        'type': 'url',
-        'location': ('$tarballs_base/neutron-lbaas-dashboard/'
-                     'neutron-lbaas-dashboard-master.tar.gz')},
     'horizon-plugin-neutron-vpnaas-dashboard': {
         'type': 'url',
         'location': ('$tarballs_base/neutron-vpnaas-dashboard/'
@@ -432,6 +455,10 @@ SOURCES = {
         'type': 'url',
         'location': ('$tarballs_base/octavia-dashboard/'
                      'octavia-dashboard-master.tar.gz')},
+    'horizon-plugin-qinling-dashboard': {
+        'type': 'url',
+        'location': ('$tarballs_base/qinling-dashboard/'
+                     'qinling-dashboard-master.tar.gz')},
     'horizon-plugin-sahara-dashboard': {
         'type': 'url',
         'location': ('$tarballs_base/sahara-dashboard/'
@@ -504,6 +531,14 @@ SOURCES = {
         'type': 'url',
         'location': ('$tarballs_base/manila/'
                      'manila-master.tar.gz')},
+    'masakari-base': {
+        'type': 'url',
+        'location': ('$tarballs_base/masakari/'
+                     'masakari-master.tar.gz')},
+    'masakari-monitors': {
+        'type': 'url',
+        'location': ('$tarballs_base/masakari-monitors/'
+                     'masakari-monitors-master.tar.gz')},
     'mistral-base': {
         'type': 'url',
         'location': ('$tarballs_base/mistral/'
@@ -585,10 +620,6 @@ SOURCES = {
         'type': 'url',
         'location': ('$tarballs_base/neutron-dynamic-routing/'
                      'neutron-dynamic-routing-master.tar.gz')},
-    'neutron-lbaas-agent': {
-        'type': 'url',
-        'location': ('$tarballs_base/neutron-lbaas/'
-                     'neutron-lbaas-master.tar.gz')},
     'neutron-server-opendaylight-plugin-networking-odl': {
         'type': 'url',
         'location': ('$tarballs_base/networking-odl/'
@@ -605,18 +636,10 @@ SOURCES = {
         'type': 'url',
         'location': ('$tarballs_base/networking-sfc/'
                      'networking-sfc-master.tar.gz')},
-    'neutron-server-plugin-networking-infoblox': {
-        'type': 'url',
-        'location': ('$tarballs_base/networking-infoblox/'
-                     'networking-infoblox-master.tar.gz')},
     'neutron-server-plugin-neutron-dynamic-routing': {
         'type': 'url',
         'location': ('$tarballs_base/neutron-dynamic-routing/'
                      'neutron-dynamic-routing-master.tar.gz')},
-    'neutron-server-plugin-neutron-lbaas': {
-        'type': 'url',
-        'location': ('$tarballs_base/neutron-lbaas/'
-                     'neutron-lbaas-master.tar.gz')},
     'neutron-server-plugin-vmware-nsxlib': {
         'type': 'url',
         'location': ('$tarballs_base/vmware-nsxlib/'
@@ -661,6 +684,10 @@ SOURCES = {
         'type': 'url',
         'location': ('$tarballs_base/placement/'
                      'placement-master.tar.gz')},
+    'qinling-base': {
+        'type': 'url',
+        'location': ('$tarballs_base/qinling/'
+                     'qinling-master.tar.gz')},
     'tempest-plugin-tempest-conf': {
         'type': 'url',
         'location': ('$tarballs_base/python-tempestconf/'
@@ -757,6 +784,30 @@ SOURCES = {
         'type': 'url',
         'location': ('$tarballs_base/sahara/'
                      'sahara-master.tar.gz')},
+    'sahara-base-plugin-ambari': {
+        'type': 'url',
+        'location': ('$tarballs_base/sahara-plugin-ambari/'
+                     'sahara-plugin-ambari-master.tar.gz')},
+    'sahara-base-plugin-cdh': {
+        'type': 'url',
+        'location': ('$tarballs_base/sahara-plugin-cdh/'
+                     'sahara-plugin-cdh-master.tar.gz')},
+    'sahara-base-plugin-mapr': {
+        'type': 'url',
+        'location': ('$tarballs_base/sahara-plugin-mapr/'
+                     'sahara-plugin-mapr-master.tar.gz')},
+    'sahara-base-plugin-spark': {
+        'type': 'url',
+        'location': ('$tarballs_base/sahara-plugin-spark/'
+                     'sahara-plugin-spark-master.tar.gz')},
+    'sahara-base-plugin-storm': {
+        'type': 'url',
+        'location': ('$tarballs_base/sahara-plugin-storm/'
+                     'sahara-plugin-storm-master.tar.gz')},
+    'sahara-base-plugin-vanilla': {
+        'type': 'url',
+        'location': ('$tarballs_base/sahara-plugin-vanilla/'
+                     'sahara-plugin-vanilla-master.tar.gz')},
     'searchlight-base': {
         'type': 'url',
         'location': ('$tarballs_base/searchlight/'
@@ -789,10 +840,6 @@ SOURCES = {
         'type': 'url',
         'location': ('$tarballs_base/python-tripleoclient/'
                      'tripleoclient-master.tar.gz')},
-    'tripleo-ui': {
-        'type': 'url',
-        'location': ('$tarballs_base/tripleo-ui/'
-                     'tripleo-ui-latest.tar.gz')},
     'trove-base': {
         'type': 'url',
         'location': ('$tarballs_base/trove/'
@@ -1142,6 +1189,18 @@ USERS = {
     'placement-user': {
         'uid': 42482,
         'gid': 42482,
+    },
+    'cyborg-user': {
+        'uid': 42483,
+        'gid': 42483,
+    },
+    'qinling-user': {
+        'uid': 42484,
+        'gid': 42484,
+    },
+    'masakari-user': {
+        'uid': 42485,
+        'gid': 42485,
     }
 }
 

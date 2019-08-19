@@ -1,5 +1,3 @@
-.. _image-building:
-
 =========================
 Building Container Images
 =========================
@@ -151,13 +149,12 @@ repository named ``mykollarepo``:
 
    kolla-build -n mykollarepo --push
 
-To push images to a `local registry
-<https://docs.openstack.org/kolla-ansible/latest/user/multinode.html#deploy-a-registry>`_,
-use ``--registry`` flag:
+To push images to a :kolla-ansible-doc:`local registry
+<user/multinode.html#deploy-a-registry>`, use ``--registry`` flag:
 
 .. code-block:: console
 
-   kolla-build --registry 172.22.2.81:5000 --push
+   kolla-build --registry 172.22.2.81:4000 --push
 
 Build OpenStack from source
 ===========================
@@ -196,7 +193,7 @@ The ``etc/kolla/kolla-build.conf`` file looks like:
 
    [keystone-base]
    type = git
-   location = https://git.openstack.org/openstack/keystone
+   location = https://opendev.org/openstack/keystone
    reference = stable/mitaka
 
    [heat-base]
@@ -216,6 +213,8 @@ overrides file, add the following:
 
    RUN subscription-manager register --user=<user-name> \
    --password=<password> && subscription-manager attach --pool <pool-id>
+
+.. _dockerfile-customisation:
 
 Dockerfile Customisation
 ========================
@@ -286,7 +285,7 @@ as part of a binary install type build:
 
 * ``openstack-dashboard``
 * ``httpd``
-* ``mod_wsgi``
+* ``python2-mod_wsgi`` or ``python3-mod_wsgi``
 * ``mod_ssl``
 * ``gettext``
 
@@ -356,7 +355,7 @@ image, one may want to add the following to the ``template-override`` file:
    {% extends parent_template %}
 
    {% block neutron_server_footer %}
-   RUN git clone https://git.openstack.org/openstack/networking-cisco \
+   RUN git clone https://opendev.org/x/networking-cisco \
        && pip --no-cache-dir install networking-cisco
    {% endblock %}
 
@@ -391,7 +390,7 @@ Continuing with the above example, add the following to
 
    [neutron-server-plugin-networking-cisco]
    type = git
-   location = https://git.openstack.org/openstack/networking-cisco
+   location = https://opendev.org/x/networking-cisco
    reference = master
 
 The build will clone the repository, resulting in the following archive
@@ -532,11 +531,10 @@ Kolla-ansible with Local Registry
 ---------------------------------
 
 To make kolla-ansible pull images from a local registry, set
-``"docker_registry"`` to ``"172.22.2.81:5000"`` in
+``"docker_registry"`` to ``"172.22.2.81:4000"`` in
 ``"/etc/kolla/globals.yml"``. Make sure Docker is allowed to pull images from
-insecure registry. See
-`Docker Insecure Registry
-<https://docs.openstack.org/kolla-ansible/latest/user/multinode.html#deploy-a-registry>`_.
+insecure registry. See :kolla-ansible-doc:`Docker Insecure Registry
+<user/multinode.html#deploy-a-registry>`.
 
 Building behind a proxy
 -----------------------

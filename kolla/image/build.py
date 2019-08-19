@@ -29,6 +29,7 @@ import tempfile
 import threading
 import time
 
+from distutils.version import LooseVersion
 from distutils.version import StrictVersion
 import docker
 import git
@@ -70,142 +71,122 @@ STATUS_UNMATCHED = 'unmatched'
 STATUS_MATCHED = 'matched'
 STATUS_UNPROCESSED = 'unprocessed'
 STATUS_SKIPPED = 'skipped'
+STATUS_UNBUILDABLE = 'unbuildable'
 
 # All error status constants.
 STATUS_ERRORS = (STATUS_CONNECTION_ERROR, STATUS_PUSH_ERROR,
                  STATUS_ERROR, STATUS_PARENT_ERROR)
 
+# The dictionary of unbuildable images supports keys in the format:
+# '<distro>+<installation_type>+<arch>' where each component is optional
+# and can be omitted along with the + separator which means that component
+# is irrelevant. Otherwise all must match for skip to happen.
+UNBUILDABLE_IMAGES = {
+    'aarch64': {
+        "cyborg-base",       # no binary package
+        "kibana",            # no binary package
+        "monasca-grafana",   # no phantomJS on aarch64
+        "opendaylight",      # no binary package
+        "prometheus-mtail",  # no aarch64 binary
+        "telegraf",          # no binary package
+        "xtrabackup",        # no binary package
+    },
 
-SKIPPED_IMAGES = {
-    'centos+binary': [
+    'source': {
+        "tripleoclient",
+    },
+    'binary': {
         "almanach-base",
         "bifrost-base",
         "blazar-base",
+        "cyborg-base",
         "dragonflow-base",
         "freezer-base",
         "karbor-base",
         "kuryr-base",
+        "masakari-base",
         "monasca-base",
         "monasca-thresh",
         "nova-mksproxy",
-        "ovsdpdk",
+        "qinling-base",
         "searchlight-base",
         "solum-base",
         "vmtp",
         "zun-base",
-    ],
-    'centos+source': [
+    },
+
+    'source+aarch64': {
+        "monasca-base",  # pypi 'confluent-kafka' requires newer libfdkafka-dev
+                         # than distributions have
+        "tempest",       # no binary package
+    },
+
+    'centos': {
         "ovsdpdk",
-        "tripleoclient",
-        # TODO(jeffrey4l): remove tripleo-ui when following bug is fixed
-        # https://bugs.launchpad.net/tripleo/+bug/1744215
-        "tripleo-ui",
-    ],
-    'ubuntu+binary': [
-        "almanach-base",
-        "bifrost-base",
-        "blazar-base",
+    },
+    'oraclelinux': {
+        "ovsdpdk",
+    },
+    'debian': {
+        "cyborg-base",
+        "mongodb",
+        "ovsdpdk",
+        "qdrouterd",
+        "sensu-base",
+    },
+    'ubuntu': {
+        "cyborg-base",
+        "qdrouterd",  # There is no qdrouterd package for ubuntu bionic
+    },
+
+    'debian+aarch64': {
+        "bifrost-base",  # bifrost tries to install 'mysql-server'
+        "skydive-base",  # no binary package
+    },
+    'ubuntu+aarch64': {
+        "sensu-base",    # no binary package
+        "skydive-base",  # no binary package
+    },
+
+    'centos+aarch64': {
+        "elasticsearch",  # no binary package
+        "influxdb",       # no binary package
+        "mongodb",        # no binary package
+    },
+
+    'debian+binary': {
         "cloudkitty-base",
         "congress-base",
-        "crane",
-        "dragonflow-base",
         "ec2-api",
-        "freezer-base",
         "heat-all",
         "ironic-neutron-agent",
-        "karbor-base",
-        "kuryr-base",
         "mistral-event-engine",
-        "monasca-base",
-        "monasca-thresh",
-        "nova-mksproxy",
         "novajoin-base",
         "octavia-base",
-        "placement-base",
-        # There is no qdrouterd package for ubuntu bionic
-        "qdrouterd",
-        "searchlight-base",
-        "solum-base",
         "tacker-base",
         "tripleoclient",
-        "tripleo-ui",
         "vitrage-base",
-        "vmtp",
         "zaqar",
-        "zun-base",
-    ],
-    'ubuntu+source': [
-        "crane",
-        # There is no qdrouterd package for ubuntu bionic
-        "qdrouterd",
-        "tripleoclient",
-        # TODO(jeffrey4l): remove tripleo-ui when following bug is fixed
-        # https://bugs.launchpad.net/tripleo/+bug/1744215
-        "tripleo-ui"
-    ],
-    'debian+binary': [
-        "almanach-base",
+    },
+
+    'oraclelinux+source': {
         "bifrost-base",
-        "blazar-base",
+    },
+
+    'ubuntu+binary': {
         "cloudkitty-base",
         "congress-base",
-        "crane",
-        "dragonflow-base",
         "ec2-api",
-        "freezer-base",
         "heat-all",
         "ironic-neutron-agent",
-        "karbor-base",
-        "kuryr-base",
         "mistral-event-engine",
-        "monasca-base",
-        "monasca-thresh",
-        "nova-mksproxy",
         "novajoin-base",
         "octavia-base",
-        "searchlight-base",
-        "sensu-base",
-        "solum-base",
         "tacker-base",
         "tripleoclient",
-        "tripleo-ui",
         "vitrage-base",
-        "vmtp",
         "zaqar",
-        "zun-base"
-    ],
-    'debian+source': [
-        "crane",
-        "sensu-base",
-        "tripleoclient",
-        "tripleo-ui"
-    ],
-    'oraclelinux+binary': [
-        "almanach-base",
-        "bifrost-base",
-        "blazar-base",
-        "crane",
-        "dragonflow-base",
-        "freezer-base",
-        "karbor-base",
-        "kuryr-base",
-        "monasca-base",
-        "monasca-thresh",
-        "nova-mksproxy",
-        "ovsdpdk",
-        "searchlight-base",
-        "solum-base",
-        "vmtp",
-        "zun-base"
-    ],
-    'oraclelinux+source': [
-        "bifrost-base",
-        "ovsdpdk",
-        "tripleoclient",
-        # TODO(jeffrey4l): remove tripleo-ui when following bug is fixed
-        # https://bugs.launchpad.net/tripleo/+bug/1744215
-        "tripleo-ui"
-    ]
+    },
 }
 
 
@@ -525,7 +506,7 @@ class BuildTask(DockerTask):
 
         self.logger.debug('Processing')
 
-        if image.status == STATUS_SKIPPED:
+        if image.status in [STATUS_SKIPPED, STATUS_UNBUILDABLE]:
             self.logger.info('Skipping %s' % image.name)
             return
 
@@ -540,7 +521,8 @@ class BuildTask(DockerTask):
             return
 
         image.status = STATUS_BUILDING
-        self.logger.info('Building')
+        image.start = datetime.datetime.now()
+        self.logger.info('Building started at %s' % image.start)
 
         if image.source and 'source' in image.source:
             self.process_source(image, image.source)
@@ -605,7 +587,9 @@ class BuildTask(DockerTask):
             self.logger.exception('Unknown error when building')
         else:
             image.status = STATUS_BUILT
-            self.logger.info('Built')
+            now = datetime.datetime.now()
+            self.logger.info('Built at %s (took %s)' %
+                             (now, now - image.start))
 
     def squash(self):
         image_tag = self.image.canonical_name
@@ -675,11 +659,20 @@ class KollaWorker(object):
         else:
             self.namespace = conf.namespace
         self.base = conf.base
+        self.use_dumb_init = conf.use_dumb_init
         self.base_tag = conf.base_tag
         self.install_type = conf.install_type
         self.tag = conf.tag
         self.base_arch = conf.base_arch
+        self.debian_arch = self.base_arch
+        if self.base_arch == 'aarch64':
+            self.debian_arch = 'arm64'
+        elif self.base_arch == 'x86_64':
+            self.debian_arch = 'amd64'
+        elif self.base_arch == 'ppc64le':
+            self.debian_arch = 'ppc64el'
         self.images = list()
+        self.openstack_release = conf.openstack_release
         rpm_setup_config = ([repo_file for repo_file in
                              conf.rpm_setup_config if repo_file is not None])
         self.rpm_setup = self.build_rpm_setup(rpm_setup_config)
@@ -688,6 +681,39 @@ class KollaWorker(object):
         rh_type = ['source', 'binary', 'rdo', 'rhos']
         deb_base = ['ubuntu', 'debian']
         deb_type = ['source', 'binary']
+
+        if self.base in rh_base and self.base_tag.startswith('7'):
+            self.conf.distro_python_version = "2.7"
+        elif self.base in rh_base and self.base_tag.startswith('8'):
+            self.conf.distro_python_version = "3.6"
+        elif self.base in ['debian']:
+            self.conf.distro_python_version = "3.7"
+        elif self.base in ['ubuntu']:
+            self.conf.distro_python_version = "3.6"
+        else:
+            # Assume worst
+            self.conf.distro_python_version = "2.7"
+
+        if self.conf.distro_package_manager is not None:
+            package_manager = self.conf.distro_package_manager
+        elif self.base in rh_base:
+            if LooseVersion(self.base_tag) >= LooseVersion('8'):
+                package_manager = 'dnf'
+            else:
+                package_manager = 'yum'
+        elif self.base in deb_base:
+            package_manager = 'apt'
+        self.distro_package_manager = package_manager
+
+        self.clean_package_cache = self.conf.clean_package_cache
+
+        # Determine base packaging type for use in Dockerfiles.
+        if self.conf.base_package_type:
+            self.base_package_type = self.conf.base_package_type
+        elif self.base in rh_base:
+            self.base_package_type = 'rpm'
+        elif self.base in deb_base:
+            self.base_package_type = 'deb'
 
         if not ((self.base in rh_base and self.install_type in rh_type) or
                 (self.base in deb_base and self.install_type in deb_type)):
@@ -717,15 +743,22 @@ class KollaWorker(object):
         self.image_statuses_good = dict()
         self.image_statuses_unmatched = dict()
         self.image_statuses_skipped = dict()
+        self.image_statuses_unbuildable = dict()
         self.maintainer = conf.maintainer
+        self.distro_python_version = conf.distro_python_version
 
         docker_kwargs = docker.utils.kwargs_from_env()
         try:
             self.dc = docker.APIClient(version='auto', **docker_kwargs)
         except docker.errors.DockerException as e:
             self.dc = None
-            if not conf.template_only:
-                raise e
+            if not (conf.template_only
+                    or conf.save_dependency
+                    or conf.list_images
+                    or conf.list_dependencies):
+                LOG.error("Unable to connect to Docker, exiting")
+                LOG.info("Exception caught: {0}".format(e))
+                sys.exit(1)
 
     def _get_images_dir(self):
         possible_paths = (
@@ -878,18 +911,25 @@ class KollaWorker(object):
                       'base_image': self.conf.base_image,
                       'base_distro_tag': self.base_tag,
                       'base_arch': self.base_arch,
+                      'use_dumb_init': self.use_dumb_init,
+                      'base_package_type': self.base_package_type,
+                      'debian_arch': self.debian_arch,
                       'supported_distro_release': supported_distro_release,
                       'install_metatype': self.install_metatype,
                       'image_prefix': self.image_prefix,
                       'install_type': self.install_type,
                       'namespace': self.namespace,
+                      'openstack_release': self.openstack_release,
                       'tag': self.tag,
                       'maintainer': self.maintainer,
                       'kolla_version': kolla_version,
                       'image_name': image_name,
                       'users': self.get_users(),
+                      'distro_python_version': self.distro_python_version,
+                      'distro_package_manager': self.distro_package_manager,
                       'rpm_setup': self.rpm_setup,
-                      'build_date': build_date}
+                      'build_date': build_date,
+                      'clean_package_cache': self.clean_package_cache}
             env = jinja2.Environment(  # nosec: not used to render HTML
                 loader=jinja2.FileSystemLoader(self.working_dir))
             env.filters.update(self._get_filters())
@@ -964,37 +1004,80 @@ class KollaWorker(object):
                 else:
                     filter_ += self.conf.profiles[profile]
 
+        # mark unbuildable images and their children
+        tag_element = r'(%s|%s|%s)' % (self.base,
+                                       self.install_type,
+                                       self.base_arch)
+        tag_re = re.compile(r'^%s(\+%s)*$' % (tag_element, tag_element))
+        unbuildable_images = set()
+        for set_tag in UNBUILDABLE_IMAGES:
+            if tag_re.match(set_tag):
+                unbuildable_images.update(UNBUILDABLE_IMAGES[set_tag])
+
+        if unbuildable_images:
+            for image in self.images:
+                if image.name in unbuildable_images:
+                    image.status = STATUS_UNBUILDABLE
+                else:
+                    # let's check ancestors
+                    # if any of them is unbuildable then we mark it
+                    # and then mark image
+                    build_image = True
+                    ancestor_image = image
+                    while (ancestor_image.parent is not None):
+                        ancestor_image = ancestor_image.parent
+                        if ancestor_image.name in unbuildable_images or \
+                           ancestor_image.status == STATUS_UNBUILDABLE:
+                            build_image = False
+                            ancestor_image.status = STATUS_UNBUILDABLE
+                            break
+                    if not build_image:
+                        image.status = STATUS_UNBUILDABLE
+
+        # When we want to build a subset of images then filter_ part kicks in.
+        # Otherwise we just mark everything buildable as matched for build.
+
         if filter_:
             patterns = re.compile(r"|".join(filter_).join('()'))
             for image in self.images:
-                if image.status in (STATUS_MATCHED, STATUS_SKIPPED):
+                # as we now list not buildable/skipped images we need to
+                # process them otherwise list will contain also not requested
+                # entries
+                if image.status == STATUS_MATCHED:
                     continue
                 if re.search(patterns, image.name):
-                    image.status = STATUS_MATCHED
-                    while (image.parent is not None and
-                           image.parent.status not in (STATUS_MATCHED,
-                                                       STATUS_SKIPPED)):
-                        image = image.parent
+                    if image.status not in [STATUS_SKIPPED,
+                                            STATUS_UNBUILDABLE]:
+                        image.status = STATUS_MATCHED
+
+                    # skip image if --skip-existing was given and image
+                    # was already built
+                    if (self.conf.skip_existing and image.in_docker_cache()):
+                        image.status = STATUS_SKIPPED
+
+                    # handle image ancestors
+                    ancestor_image = image
+                    while (ancestor_image.parent is not None and
+                           ancestor_image.parent.status not in
+                           (STATUS_MATCHED, STATUS_SKIPPED)):
+                        ancestor_image = ancestor_image.parent
                         if self.conf.skip_parents:
-                            image.status = STATUS_SKIPPED
+                            ancestor_image.status = STATUS_SKIPPED
                         elif (self.conf.skip_existing and
-                              image.in_docker_cache()):
-                            image.status = STATUS_SKIPPED
+                              ancestor_image.in_docker_cache()):
+                            ancestor_image.status = STATUS_SKIPPED
                         else:
-                            image.status = STATUS_MATCHED
+                            if ancestor_image.status != STATUS_UNBUILDABLE:
+                                ancestor_image.status = STATUS_MATCHED
                         LOG.debug('Image %s matched regex', image.name)
                 else:
+                    # we do not care if it is skipped or not as we did not
+                    # request it
                     image.status = STATUS_UNMATCHED
         else:
             for image in self.images:
-                image.status = STATUS_MATCHED
-
-        skipped_images = SKIPPED_IMAGES.get('%s+%s' % (self.base,
-                                                       self.install_type))
-        if skipped_images:
-            for image in self.images:
-                if image.name in skipped_images:
-                    image.status = STATUS_UNMATCHED
+                if image.status != STATUS_UNBUILDABLE:
+                    image.status = STATUS_MATCHED
 
     def summary(self):
         """Walk the dictionary of images statuses and print results."""
@@ -1010,6 +1093,7 @@ class KollaWorker(object):
             'failed': [],
             'not_matched': [],
             'skipped': [],
+            'unbuildable': [],
         }
 
         if self.image_statuses_good:
@@ -1054,12 +1138,22 @@ class KollaWorker(object):
                 })
 
         if self.image_statuses_skipped:
-            LOG.debug("================================")
-            LOG.debug("Images skipped due build options")
-            LOG.debug("================================")
+            LOG.info("===================================")
+            LOG.info("Images skipped due to build options")
+            LOG.info("===================================")
             for name in sorted(self.image_statuses_skipped.keys()):
-                LOG.debug(name)
+                LOG.info(name)
                 results['skipped'].append({
+                    'name': name,
+                })
+
+        if self.image_statuses_unbuildable:
+            LOG.info("=========================================")
+            LOG.info("Images not buildable due to build options")
+            LOG.info("=========================================")
+            for name in sorted(self.image_statuses_unbuildable.keys()):
+                LOG.info(name)
+                results['unbuildable'].append({
                     'name': name,
                 })
 
@@ -1069,11 +1163,13 @@ class KollaWorker(object):
         if any([self.image_statuses_bad,
                 self.image_statuses_good,
                 self.image_statuses_unmatched,
-                self.image_statuses_skipped]):
+                self.image_statuses_skipped,
+                self.image_statuses_unbuildable]):
             return (self.image_statuses_bad,
                     self.image_statuses_good,
                     self.image_statuses_unmatched,
-                    self.image_statuses_skipped)
+                    self.image_statuses_skipped,
+                    self.image_statuses_unbuildable)
         for image in self.images:
             if image.status == STATUS_BUILT:
                 self.image_statuses_good[image.name] = image.status
@@ -1081,12 +1177,15 @@ class KollaWorker(object):
                 self.image_statuses_unmatched[image.name] = image.status
             elif image.status == STATUS_SKIPPED:
                 self.image_statuses_skipped[image.name] = image.status
+            elif image.status == STATUS_UNBUILDABLE:
+                self.image_statuses_unbuildable[image.name] = image.status
             else:
                 self.image_statuses_bad[image.name] = image.status
         return (self.image_statuses_bad,
                 self.image_statuses_good,
                 self.image_statuses_unmatched,
-                self.image_statuses_skipped)
+                self.image_statuses_skipped,
+                self.image_statuses_unbuildable)
 
     def build_image_list(self):
         def process_source_installation(image, section):
@@ -1242,12 +1341,15 @@ class KollaWorker(object):
         queue = six.moves.queue.Queue()
 
         for image in self.images:
-            if image.status in (STATUS_UNMATCHED, STATUS_SKIPPED):
+            if image.status in (STATUS_UNMATCHED, STATUS_SKIPPED,
+                                STATUS_UNBUILDABLE):
                 # Don't bother queuing up build tasks for things that
                 # were not matched in the first place... (not worth the
                 # effort to run them, if they won't be used anyway).
                 continue
-            if image.parent is None:
+            # Build all root nodes, where a root is defined as having no parent
+            # or having a parent that is explicitly being skipped.
+            if image.parent is None or image.parent.status == STATUS_SKIPPED:
                 queue.put(BuildTask(self.conf, image, push_queue))
                 LOG.info('Added image %s to queue', image.name)
 

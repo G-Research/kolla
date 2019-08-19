@@ -8,10 +8,22 @@ USER root
 {% import "macros.j2" as macros with context %}
 
 {% if install_type == 'binary' %}
-    {% set neutron_server_ovn_packages = [
-        'python-networking-ovn',
-    ] %}
+    {% if base_package_type == 'rpm' %}
+        {% if distro_python_version.startswith('3') %}
+        {% set neutron_server_ovn_packages = [
+            'python3-networking-ovn'
+        ] %}
+        {% else %}
+        {% set neutron_server_ovn_packages = [
+            'python-networking-ovn'
+        ] %}
+        {% endif %}
 
+    {% elif base_package_type == 'deb' %}
+        {% set neutron_server_ovn_packages = [
+            'python3-networking-ovn',
+        ] %}
+    {% endif %}
 {{ macros.install_packages(neutron_server_ovn_packages | customizable("packages")) }}
 
 {% elif install_type == 'source' %}

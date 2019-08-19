@@ -6,25 +6,35 @@ LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build
 {% import "macros.j2" as macros with context %}
 
 {% if install_type == 'binary' %}
-    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% if base_package_type == 'rpm' %}
        {% set barbican_api_packages = [
                 'httpd',
                 'mod_ssl',
+                'openstack-barbican-api'
+       ] %}
+
+       {% if distro_python_version.startswith('3') %}
+       {% set barbican_api_packages = barbican_api_packages + [
+                'python3-mod_wsgi',
+                'uwsgi-plugin-python3'
+       ] %}
+       {% else %}
+       {% set barbican_api_packages = barbican_api_packages + [
                 'mod_wsgi',
-                'openstack-barbican-api',
                 'uwsgi-plugin-python'
        ] %}
+       {% endif %}
 
 {{ macros.install_packages(barbican_api_packages | customizable("packages")) }}
 
 RUN sed -i -r 's,^(Listen 80),#\1,' /etc/httpd/conf/httpd.conf \
     && sed -i -r 's,^(Listen 443),#\1,' /etc/httpd/conf.d/ssl.conf
 
-    {% elif base_distro in ['debian', 'ubuntu'] %}
+    {% elif base_package_type == 'deb' %}
         {% set barbican_api_packages = [
                 'apache2',
                 'barbican-api',
-                'libapache2-mod-wsgi',
+                'libapache2-mod-wsgi-py3',
                 'uwsgi-plugin-python'
         ] %}
 
