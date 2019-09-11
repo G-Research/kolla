@@ -1,0 +1,20 @@
+FROM {{ namespace }}/{{ image_prefix }}prometheus-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block prometheus_rabbitmq_exporter_header %}{% endblock %}
+
+{% block prometheus_rabbitmq_exporter_repository_version %}
+ENV rabbitmq_exporter_version=0.29.0
+{% endblock %}
+
+{% block prometheus_rabbitmq_exporter_install %}
+RUN curl -sSL -o /tmp/rabbitmq_exporter.tar.gz https://github.com/kbudde/rabbitmq_exporter/releases/download/v${rabbitmq_exporter_version}/rabbitmq_exporter-${rabbitmq_exporter_version}.linux-${prometheus_arch}.tar.gz \
+    && tar xvf /tmp/rabbitmq_exporter.tar.gz -C /opt/ \
+    && rm -f /tmp/rabbitmq_exporter.tar.gz \
+    && ln -s /opt/rabbitmq_exporter* /opt/rabbitmq_exporter
+{% endblock %}
+
+{% block prometheus_rabbitmq_exporter_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER prometheus

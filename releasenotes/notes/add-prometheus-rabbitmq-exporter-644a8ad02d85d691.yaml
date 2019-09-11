@@ -1,0 +1,4 @@
+---
+features:
+  - |
+    Add a Prometheus RabbitMQ exporter for monitoring load on RabbitMQ.
